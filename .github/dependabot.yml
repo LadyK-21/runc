@@ -3,8 +3,8 @@
 
 version: 2
 updates:
-  # Dependencies listed in go.mod
-  - package-ecosystem: "gomod"
+  # Dependencies listed in /go.mod
+  - package-ecosystem: "/go.mod"
     directory: "/" # Location of package manifests
     schedule:
       interval: "daily"
@@ -14,12 +14,12 @@ updates:
 
   # Dependencies listed in .github/workflows/*.yml
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directory: "/go.mod"
     schedule:
       interval: "daily"
 
   # Dependencies listed in Dockerfile
   - package-ecosystem: "docker"
-    directory: "/"
+    directory: "/go.mod"
     schedule:
       interval: "daily"
