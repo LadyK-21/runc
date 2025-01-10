@@ -3,7 +3,8 @@
 load helpers
 
 function setup() {
-	setup_hello
+	setup_busybox
+	update_config '.process.args = ["/bin/echo", "Hello World"]'
 }
 
 function teardown() {
@@ -30,11 +31,11 @@ function teardown() {
 
 	git clone https://github.com/opencontainers/runtime-spec.git
 	(cd runtime-spec && git reset --hard "$SPEC_REF")
-	SCHEMA='runtime-spec/schema/config-schema.json'
-	[ -e "$SCHEMA" ]
 
-	GO111MODULE=auto go get github.com/xeipuuv/gojsonschema
-	GO111MODULE=auto go build runtime-spec/schema/validate.go
+	cd runtime-spec/schema
+	go mod init runtime-spec
+	go mod tidy
+	go build ./validate.go
 
-	./validate "$SCHEMA" config.json
+	./validate config-schema.json ../../config.json
 }

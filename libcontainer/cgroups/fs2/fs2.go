@@ -8,13 +8,12 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/fscommon"
-	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 type parseError = fscommon.ParseError
 
-type manager struct {
-	config *configs.Cgroup
+type Manager struct {
+	config *cgroups.Cgroup
 	// dirPath is like "/sys/fs/cgroup/user.slice/user-1001.slice/session-1.scope"
 	dirPath string
 	// controllers is content of "cgroup.controllers" file.
@@ -25,7 +24,7 @@ type manager struct {
 // NewManager creates a manager for cgroup v2 unified hierarchy.
 // dirPath is like "/sys/fs/cgroup/user.slice/user-1001.slice/session-1.scope".
 // If dirPath is empty, it is automatically set using config.
-func NewManager(config *configs.Cgroup, dirPath string) (cgroups.Manager, error) {
+func NewManager(config *cgroups.Cgroup, dirPath string) (*Manager, error) {
 	if dirPath == "" {
 		var err error
 		dirPath, err = defaultDirPath(config)
@@ -34,14 +33,14 @@ func NewManager(config *configs.Cgroup, dirPath string) (cgroups.Manager, error)
 		}
 	}
 
-	m := &manager{
+	m := &Manager{
 		config:  config,
 		dirPath: dirPath,
 	}
 	return m, nil
 }
 
-func (m *manager) getControllers() error {
+func (m *Manager) getControllers() error {
 	if m.controllers != nil {
 		return nil
 	}
@@ -62,7 +61,7 @@ func (m *manager) getControllers() error {
 	return nil
 }
 
-func (m *manager) Apply(pid int) error {
+func (m *Manager) Apply(pid int) error {
 	if err := CreateCgroupPath(m.dirPath, m.config); err != nil {
 		// Related tests:
 		// - "runc create (no limits + no cgrouppath + no permission) succeeds"
@@ -71,7 +70,7 @@ func (m *manager) Apply(pid int) error {
 		if m.config.Rootless {
 			if m.config.Path == "" {
 				if blNeed, nErr := needAnyControllers(m.config.Resources); nErr == nil && !blNeed {
-					return nil
+					return cgroups.ErrRootless
 				}
 				return fmt.Errorf("rootless needs no limits + no cgrouppath when no permission is granted for cgroups: %w", err)
 			}
@@ -84,15 +83,15 @@ func (m *manager) Apply(pid int) error {
 	return nil
 }
 
-func (m *manager) GetPids() ([]int, error) {
+func (m *Manager) GetPids() ([]int, error) {
 	return cgroups.GetPids(m.dirPath)
 }
 
-func (m *manager) GetAllPids() ([]int, error) {
+func (m *Manager) GetAllPids() ([]int, error) {
 	return cgroups.GetAllPids(m.dirPath)
 }
 
-func (m *manager) GetStats() (*cgroups.Stats, error) {
+func (m *Manager) GetStats() (*cgroups.Stats, error) {
 	var errs []error
 
 	st := cgroups.NewStats()
@@ -114,6 +113,17 @@ func (m *manager) GetStats() (*cgroups.Stats, error) {
 	if err := statCpu(m.dirPath, st); err != nil && !os.IsNotExist(err) {
 		errs = append(errs, err)
 	}
+	// PSI (since kernel 4.20).
+	var err error
+	if st.CpuStats.PSI, err = statPSI(m.dirPath, "cpu.pressure"); err != nil {
+		errs = append(errs, err)
+	}
+	if st.MemoryStats.PSI, err = statPSI(m.dirPath, "memory.pressure"); err != nil {
+		errs = append(errs, err)
+	}
+	if st.BlkioStats.PSI, err = statPSI(m.dirPath, "io.pressure"); err != nil {
+		errs = append(errs, err)
+	}
 	// hugetlb (since kernel 5.6)
 	if err := statHugeTlb(m.dirPath, st); err != nil && !os.IsNotExist(err) {
 		errs = append(errs, err)
@@ -122,13 +132,17 @@ func (m *manager) GetStats() (*cgroups.Stats, error) {
 	if err := fscommon.RdmaGetStats(m.dirPath, st); err != nil && !os.IsNotExist(err) {
 		errs = append(errs, err)
 	}
+	// misc (since kernel 5.13)
+	if err := statMisc(m.dirPath, st); err != nil && !os.IsNotExist(err) {
+		errs = append(errs, err)
+	}
 	if len(errs) > 0 && !m.config.Rootless {
 		return st, fmt.Errorf("error while statting cgroup v2: %+v", errs)
 	}
 	return st, nil
 }
 
-func (m *manager) Freeze(state configs.FreezerState) error {
+func (m *Manager) Freeze(state cgroups.FreezerState) error {
 	if m.config.Resources == nil {
 		return errors.New("cannot toggle freezer: cgroups not configured for container")
 	}
@@ -139,15 +153,15 @@ func (m *manager) Freeze(state configs.FreezerState) error {
 	return nil
 }
 
-func (m *manager) Destroy() error {
+func (m *Manager) Destroy() error {
 	return cgroups.RemovePath(m.dirPath)
 }
 
-func (m *manager) Path(_ string) string {
+func (m *Manager) Path(_ string) string {
 	return m.dirPath
 }
 
-func (m *manager) Set(r *configs.Resources) error {
+func (m *Manager) Set(r *cgroups.Resources) error {
 	if r == nil {
 		return nil
 	}
@@ -167,7 +181,7 @@ func (m *manager) Set(r *configs.Resources) error {
 		return err
 	}
 	// cpu (since kernel 4.15)
-	if err := setCpu(m.dirPath, r); err != nil {
+	if err := setCPU(m.dirPath, r); err != nil {
 		return err
 	}
 	// devices (since kernel 4.15, pseudo-controller)
@@ -203,7 +217,7 @@ func (m *manager) Set(r *configs.Resources) error {
 	return nil
 }
 
-func setDevices(dirPath string, r *configs.Resources) error {
+func setDevices(dirPath string, r *cgroups.Resources) error {
 	if cgroups.DevicesSetV2 == nil {
 		if len(r.Devices) > 0 {
 			return cgroups.ErrDevicesUnsupported
@@ -213,12 +227,12 @@ func setDevices(dirPath string, r *configs.Resources) error {
 	return cgroups.DevicesSetV2(dirPath, r)
 }
 
-func (m *manager) setUnified(res map[string]string) error {
+func (m *Manager) setUnified(res map[string]string) error {
 	for k, v := range res {
 		if strings.Contains(k, "/") {
 			return fmt.Errorf("unified resource %q must be a file name (no slashes)", k)
 		}
-		if err := cgroups.WriteFile(m.dirPath, k, v); err != nil {
+		if err := cgroups.WriteFileByLine(m.dirPath, k, v); err != nil {
 			// Check for both EPERM and ENOENT since O_CREAT is used by WriteFile.
 			if errors.Is(err, os.ErrPermission) || errors.Is(err, os.ErrNotExist) {
 				// Check if a controller is available,
@@ -239,21 +253,21 @@ func (m *manager) setUnified(res map[string]string) error {
 	return nil
 }
 
-func (m *manager) GetPaths() map[string]string {
+func (m *Manager) GetPaths() map[string]string {
 	paths := make(map[string]string, 1)
 	paths[""] = m.dirPath
 	return paths
 }
 
-func (m *manager) GetCgroups() (*configs.Cgroup, error) {
+func (m *Manager) GetCgroups() (*cgroups.Cgroup, error) {
 	return m.config, nil
 }
 
-func (m *manager) GetFreezerState() (configs.FreezerState, error) {
+func (m *Manager) GetFreezerState() (cgroups.FreezerState, error) {
 	return getFreezer(m.dirPath)
 }
 
-func (m *manager) Exists() bool {
+func (m *Manager) Exists() bool {
 	return cgroups.PathExists(m.dirPath)
 }
 
@@ -261,11 +275,43 @@ func OOMKillCount(path string) (uint64, error) {
 	return fscommon.GetValueByKey(path, "memory.events", "oom_kill")
 }
 
-func (m *manager) OOMKillCount() (uint64, error) {
+func (m *Manager) OOMKillCount() (uint64, error) {
 	c, err := OOMKillCount(m.dirPath)
 	if err != nil && m.config.Rootless && os.IsNotExist(err) {
 		err = nil
 	}
 
 	return c, err
+}
+
+func CheckMemoryUsage(dirPath string, r *cgroups.Resources) error {
+	if !r.MemoryCheckBeforeUpdate {
+		return nil
+	}
+
+	if r.Memory <= 0 && r.MemorySwap <= 0 {
+		return nil
+	}
+
+	usage, err := fscommon.GetCgroupParamUint(dirPath, "memory.current")
+	if err != nil {
+		// This check is on best-effort basis, so if we can't read the
+		// current usage (cgroup not yet created, or any other error),
+		// we should not fail.
+		return nil
+	}
+
+	if r.MemorySwap > 0 {
+		if uint64(r.MemorySwap) <= usage {
+			return fmt.Errorf("rejecting memory+swap limit %d <= usage %d", r.MemorySwap, usage)
+		}
+	}
+
+	if r.Memory > 0 {
+		if uint64(r.Memory) <= usage {
+			return fmt.Errorf("rejecting memory limit %d <= usage %d", r.Memory, usage)
+		}
+	}
+
+	return nil
 }
