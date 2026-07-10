@@ -1,9 +1,9 @@
 cyphar.com/go-pathrs v0.2.5 h1:SnX9FBvnoyn3lUs1dkMgZ52bAETpirNu3FTRh5HlRik=
 cyphar.com/go-pathrs v0.2.5/go.mod h1:y8f1EMG7r+hCuFf/rXsKqMJrJAUoADZGNh5/vZPKcGc=
-github.com/aperturerobotics/protobuf-go-lite v0.14.0 h1:6YhovtoUZtXgXLHZ2VV2GCYUzFfi8UN6172Vl2flNlE=
-github.com/aperturerobotics/protobuf-go-lite v0.14.0/go.mod h1:lGH3s5ArCTXKI4wJdlNpaybUtwSjfAG0vdWjxOfMcF8=
-github.com/checkpoint-restore/go-criu/v8 v8.3.0 h1:UC3Ioay1OMN2Wg33U53enRoG2701vJ9Y2Ex4APmC52w=
-github.com/checkpoint-restore/go-criu/v8 v8.3.0/go.mod h1:33d6FwGJGwnzKVvaO0SxlN0tPSuArKU9X/inD/L7/qA=
+github.com/aperturerobotics/protobuf-go-lite v0.15.0 h1:Ke9pkt5zO5iQf2q7iAYsXHlCDhGeQH0cvhCTIiiWUIg=
+github.com/aperturerobotics/protobuf-go-lite v0.15.0/go.mod h1:3Ay/E7iaw2KWLirK3+dDdNJZHK0hu8Y1/kKeYeUa+8s=
+github.com/checkpoint-restore/go-criu/v8 v8.4.0 h1:w6WDxjde4pvXYTIBuj6dsWsaPorKwSWuCk/qSKTO3Jw=
+github.com/checkpoint-restore/go-criu/v8 v8.4.0/go.mod h1:SK5UexowK0P99gCcJJOavgVVlUWydGUfXSQUf1qDkHU=
 github.com/cilium/ebpf v0.17.3 h1:FnP4r16PWYSE4ux6zN+//jMcW4nMVRvuTLVTvCjyyjg=
 github.com/cilium/ebpf v0.17.3/go.mod h1:G5EDHij8yiLzaqn0WjyfJHvRa+3aDlReIaLVRMvOyJk=
 github.com/containerd/console v1.0.5 h1:R0ymNeydRqH2DmakFNdmjR2k0t7UPuiOV/N/27/qqsc=
