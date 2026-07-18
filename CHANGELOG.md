@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The poststart hooks are now executed after starting the user-specified
   process, fixing a runtime-spec conformance issue. (#4347, #5186)
 
+### Changed ###
+- Updated builds to libseccomp v2.6.1. (#5376)
+
 ## [1.5.0] - 2026-06-19
 
 > Why do we even have that lever?!
